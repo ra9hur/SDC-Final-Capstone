@@ -41,43 +41,57 @@ class DBWNode(object):
         decel_limit = rospy.get_param('~decel_limit', -5)
         accel_limit = rospy.get_param('~accel_limit', 1.)
         wheel_radius = rospy.get_param('~wheel_radius', 0.2413)
-        wheel_base = rospy.get_param('~wheel_base', 2.8498)
-        steer_ratio = rospy.get_param('~steer_ratio', 14.8)
-        max_lat_accel = rospy.get_param('~max_lat_accel', 3.)
-        max_steer_angle = rospy.get_param('~max_steer_angle', 8.)
+        wheel_base = rospy.get_param('~wheel_base', 2.8498)         # YawController
+        steer_ratio = rospy.get_param('~steer_ratio', 14.8)         # YawController
+        max_lat_accel = rospy.get_param('~max_lat_accel', 3.)       # YawController
+        max_steer_angle = rospy.get_param('~max_steer_angle', 8.)   # YawController
 
         self.steer_pub = rospy.Publisher('/vehicle/steering_cmd', SteeringCmd, queue_size=1)
         self.throttle_pub = rospy.Publisher('/vehicle/throttle_cmd', ThrottleCmd, queue_size=1)
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd', BrakeCmd, queue_size=1)
 
+        # Parameters required for pid and yaw_controller
+        kwargs = {
+            'wheel_base'        : wheel_base,
+            'steer_ratio'       : steer_ratio,
+            'max_lat_accel'     : max_lat_accel,
+            'max_steer_angle'   : max_steer_angle
+        }
+
         # TODO: Create `TwistController` object
-        # self.controller = Controller(<Arguments you wish to provide>)
+        self.controller = Controller(**kwargs)
 
         # TODO: Subscribe to all the topics you need to
-        ## To receive target angular velocity, subscribe to /twist_cmd
-        rospy.Subscriber('/twist_cmd', TwistStamped, self.angular_vel_cb)
+        ## To receive target linear/angular velocity, subscribe to /twist_cmd
+        # Target velocities as computed by waypoint_follower
+        rospy.Subscriber('/twist_cmd', TwistStamped, self.target_vel_cb)
 
-        ## To receive target linear velocity, subscribe to /current_velocity
-        rospy.Subscriber('/current_velocity', TwistStamped, self.linear_vel_cb)
+        ## To receive current velocity data
+        # Inputs from sensor fusion ?
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_vel_cb)
 
         ## Indicates, if the car is under dbw or driver control. Subscribe to /vehicle/dbw_enabled
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_status_cb)
 
-        self.angular_vel = None
+        self.angular_velocity = None
         self.linear_velocity = None
+        self.current_velocity = None
         self.dbw_enabled = None
 
         self.loop()
 
     
-    def angular_vel_cb(self, angular):
-        # twist.twist.angular.x
-        self.angular_vel = angular
+    def target_vel_cb(self, twist):
+        # Roll/pitch angles are zero ?
+        self.angular_velocity = twist.twist.angular.z
+
+        # Coordinates for linear velocity are vehicle-centered, so only the x-direction linear velocity should be nonzero
+        self.linear_velocity = twist.twist.linear.x
 
 
-    def linear_vel_cb(self, linear):
-        # twist.twist.linear.x
-        self.linear_velocity = linear
+    def current_vel_cb(self, twist):
+        # TwistStamped datatype again used for current velocity
+        self.current_velocity = twist.twist.linear.x
 
 
     def dbw_status_cb(self, dbw_status):
@@ -93,9 +107,17 @@ class DBWNode(object):
             #                                                     <current linear velocity>,
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
-            throttle = 1.
-            brake = 0.
-            steer = 0.
+            
+            kwargs = {
+                'linear_velocity'       : self.linear_velocity, 
+                'angular_velocity'      : self.angular_velocity, 
+                'current_velocity'      : self.current_velocity,
+                'dbw_enabled'           : self.dbw_enabled
+            }
+
+            throttle, brake, steer = self.controller.control(**kwargs)
+            
+            throttle = 0.3
 
             # You should only publish the control commands if dbw is enabled
             if self.dbw_enabled:

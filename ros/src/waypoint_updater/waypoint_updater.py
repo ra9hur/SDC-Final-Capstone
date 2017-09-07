@@ -66,35 +66,39 @@ class WaypointUpdater(object):
         #pass
 
 
-    # Check angle between heading diection and that with waypoint
-    # If angle > pi/2, vehicle has passed the waypoint
-    def check_angle(car, wp):
+    def check_car_ahead(car, wp):
 
-        pose_wp_angle = math.atan2((wp.y-car.y),(wp.x-car.x))
+        # orientation is in quaternions, need to convert them to euler
+        _, _, yaw = tf.transformations.euler_from_quaternion([car.orientation.x,
+                                                                car.orientation.y,
+                                                                car.orientation.z,
+                                                                car.orientation.w])
 
-        # orientation is in quaternions, need to convert them to euclidean space
+        delta_x = waypoint.pose.pose.position.x - car.position.x
+        delta_y = waypoint.pose.pose.position.y - car.position.y
 
-        ahead = True
-        return ahead
+        x = delta_x * cos(0 - yaw) - delta_y * sin(0 - yaw)
+
+        return True if (x < 0.) else False
         
     
     def next_waypoint(self):
         
         waypoints = self.base_waypoints
 
-        min_dist = 1000    # number to be determined
+        min_dist = 10000    # number to be determined
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
 
         current_pose_index = 0
         for index, wp in enumerate(waypoints):
             
             # Calculate euclidean distance
-            dist = dl(self.current_pose.pose.position, wp.pose.pose.position)
+            dist = dl(self.current_pose.pose, wp.pose.pose.position)
             
             if (dist < min_dist):
                 
-                # Is the car ahead of the waypoint ?    WIP
-                # ahead = check_angle(self.current_pose.pose.position, wp.pose.pose.position)
+                # Is the car ahead of the waypoint
+                ahead = check_car_ahead(self.current_pose.pose, wp.pose.pose.position)
                 ahead = True
                 if (ahead):
                     current_pose_index = index + 1
@@ -118,12 +122,19 @@ class WaypointUpdater(object):
 
                 # Set lane.waypoints to include 200 points - number of points to publish
                 self.lane.waypoints = self.base_waypoints[next_index:next_index+LOOKAHEAD_WPS]
+
+                # velocity that car should move at, when travelling through the waypoint
+                target_velocity = 30.
+                for wp in self.lane.waypoints:
+                    set_waypoint_velocity(self.lane.waypoints, wp, target_velocity)
             
                 self.final_waypoints_pub.publish(self.lane)
 
             rate.sleep()
 
 
+    # The waypoint updater should update waypoints with the ideal velocity for each waypoint, based on desired speed and traffic lights. 
+    # Control of the car (i.e. making sure that the current velocity matches the target velocity), should take place in the DBW node.
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
         pass
