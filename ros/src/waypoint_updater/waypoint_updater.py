@@ -113,7 +113,7 @@ class WaypointUpdater(object):
     
     
     def update(self):
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(40)
 
         while not rospy.is_shutdown():
             if ((self.current_pose is not None) and (self.base_waypoints is not None)):
