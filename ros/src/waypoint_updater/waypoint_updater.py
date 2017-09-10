@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import tf
 import rospy
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
@@ -21,7 +22,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 50 # Number of waypoints we will publish. You can change this number
 
 
 class WaypointUpdater(object):
@@ -66,7 +67,7 @@ class WaypointUpdater(object):
         #pass
 
 
-    def check_car_ahead(car, wp):
+    def check_car_ahead(self, car, wp):
 
         # orientation is in quaternions, need to convert them to euler
         _, _, yaw = tf.transformations.euler_from_quaternion([car.orientation.x,
@@ -74,10 +75,10 @@ class WaypointUpdater(object):
                                                                 car.orientation.z,
                                                                 car.orientation.w])
 
-        delta_x = waypoint.pose.pose.position.x - car.position.x
-        delta_y = waypoint.pose.pose.position.y - car.position.y
+        delta_x = wp.x - car.position.x
+        delta_y = wp.y - car.position.y
 
-        x = delta_x * cos(0 - yaw) - delta_y * sin(0 - yaw)
+        x = delta_x * math.cos(0 - yaw) - delta_y * math.sin(0 - yaw)
 
         return True if (x < 0.) else False
         
@@ -86,19 +87,19 @@ class WaypointUpdater(object):
         
         waypoints = self.base_waypoints
 
-        min_dist = 10000    # number to be determined
+        min_dist = 1000    # number to be determined
         dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2  + (a.z-b.z)**2)
 
         current_pose_index = 0
         for index, wp in enumerate(waypoints):
             
             # Calculate euclidean distance
-            dist = dl(self.current_pose.pose, wp.pose.pose.position)
+            dist = dl(self.current_pose.pose.position, wp.pose.pose.position)
             
             if (dist < min_dist):
                 
                 # Is the car ahead of the waypoint
-                ahead = check_car_ahead(self.current_pose.pose, wp.pose.pose.position)
+                ahead = self.check_car_ahead(self.current_pose.pose, wp.pose.pose.position)
                 ahead = True
                 if (ahead):
                     current_pose_index = index + 1
@@ -125,8 +126,8 @@ class WaypointUpdater(object):
 
                 # velocity that car should move at, when travelling through the waypoint
                 target_velocity = 30.
-                for wp in self.lane.waypoints:
-                    set_waypoint_velocity(self.lane.waypoints, wp, target_velocity)
+                for index, wp in enumerate(self.lane.waypoints):
+                    self.set_waypoint_velocity(self.lane.waypoints, index, target_velocity)
             
                 self.final_waypoints_pub.publish(self.lane)
 

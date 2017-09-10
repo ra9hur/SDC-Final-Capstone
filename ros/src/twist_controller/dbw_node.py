@@ -73,29 +73,42 @@ class DBWNode(object):
         ## Indicates, if the car is under dbw or driver control. Subscribe to /vehicle/dbw_enabled
         rospy.Subscriber('/vehicle/dbw_enabled', Bool, self.dbw_status_cb)
 
-        self.angular_velocity = None
-        self.linear_velocity = None
-        self.current_velocity = None
+        self.target_angular_vel = None
+        self.target_linear_vel = None
+        self.current_angular_vel = None
+        self.current_linear_vel = None
         self.dbw_enabled = None
+        
+        #self.previous_time_step = rospy.get_rostime()
+        self.previous_time_step = rospy.rostime.get_time()
 
         self.loop()
 
     
     def target_vel_cb(self, twist):
         # Roll/pitch angles are zero ?
-        self.angular_velocity = twist.twist.angular.z
+        self.target_angular_vel = twist.twist.angular.z
 
         # Coordinates for linear velocity are vehicle-centered, so only the x-direction linear velocity should be nonzero
-        self.linear_velocity = twist.twist.linear.x
+        self.target_linear_vel = twist.twist.linear.x
 
 
     def current_vel_cb(self, twist):
         # TwistStamped datatype again used for current velocity
-        self.current_velocity = twist.twist.linear.x
+        self.current_angular_vel = twist.twist.angular.z
+        self.current_linear_vel = twist.twist.linear.x
 
 
     def dbw_status_cb(self, dbw_status):
         self.dbw_enabled = dbw_status
+
+
+    def deg2rad(self, x):
+        return (x * math.pi / 180)
+
+
+    def rad2deg(self, x):
+        return (x * 180 / math.pi)
 
 
     def loop(self):
@@ -108,16 +121,33 @@ class DBWNode(object):
             #                                                     <dbw status>,
             #                                                     <any other argument you need>)
             
+
+            # http://wiki.ros.org/rospy/Overview/Time
+            # Try to calculate using Hz information
+            #current_time_step = rospy.get_rostime()
+            #ros_duration = current_time_step - self.previous_time_step      # nsecs
+            #sample_time = ros_duration.secs + (1e-9 * ros_duration.nsecs)   # nsec to sec
+            #self.previous_time_step = current_time_step
+            
+            current_time_step = rospy.rostime.get_time()
+            sample_time = current_time_step - self.previous_time_step
+            self.previous_time_step = current_time_step
+            
             kwargs = {
-                'linear_velocity'       : self.linear_velocity, 
-                'angular_velocity'      : self.angular_velocity, 
-                'current_velocity'      : self.current_velocity,
-                'dbw_enabled'           : self.dbw_enabled
+                'target_linear_vel'       : self.target_linear_vel, 
+                'target_angular_vel'      : self.target_angular_vel, 
+                'current_linear_vel'       : self.current_linear_vel, 
+                'current_angular_vel'      : self.current_angular_vel, 
+                'sample_time'            : sample_time,
+                'dbw_enabled'            : self.dbw_enabled
             }
 
             throttle, brake, steer = self.controller.control(**kwargs)
             
-            throttle = 0.3
+            if (throttle > 0.2):
+                throttle = 0.2
+
+            steer = self.rad2deg(steer)
 
             # You should only publish the control commands if dbw is enabled
             if self.dbw_enabled:
