@@ -22,15 +22,18 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 50 # Number of waypoints we will publish. You can change this number
-
+LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+# Car speed in simulator (or real env) is MPH, whereas ROS uses MPS
+MPH_TO_MPS = 0.44704
+# max car speed
+MAX_SPEED = 20. * MPH_TO_MPS # m/s 
 
 class WaypointUpdater(object):
     def __init__(self):
         rospy.init_node('waypoint_updater')
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
-        rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
+        self.base_waypoints_sub = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
 
@@ -64,6 +67,8 @@ class WaypointUpdater(object):
         self.lane.header = waypoints.header
         
         self.base_waypoints = waypoints.waypoints
+
+        self.base_waypoints_sub.unregister()
         #pass
 
 
@@ -97,23 +102,23 @@ class WaypointUpdater(object):
             dist = dl(self.current_pose.pose.position, wp.pose.pose.position)
             
             if (dist < min_dist):
-                
+                min_dist = dist
+                current_pose_index = index + 1
+
+                ## This loop is ignored since it consumes CPU util
                 # Is the car ahead of the waypoint
-                ahead = self.check_car_ahead(self.current_pose.pose, wp.pose.pose.position)
-                ahead = True
-                if (ahead):
-                    current_pose_index = index + 1
-                else:
-                    current_pose_index = index
-                
-                break
-            wp_prev = wp
-        
+                #ahead = self.check_car_ahead(self.current_pose.pose, wp.pose.pose.position)
+                #ahead = True
+                #if (ahead):
+                #    current_pose_index = index + 1
+                #else:
+                #    current_pose_index = index
+
         return current_pose_index
     
     
     def update(self):
-        rate = rospy.Rate(40)
+        rate = rospy.Rate(10)
 
         while not rospy.is_shutdown():
             if ((self.current_pose is not None) and (self.base_waypoints is not None)):
@@ -125,7 +130,7 @@ class WaypointUpdater(object):
                 self.lane.waypoints = self.base_waypoints[next_index:next_index+LOOKAHEAD_WPS]
 
                 # velocity that car should move at, when travelling through the waypoint
-                target_velocity = 30.
+                target_velocity = MAX_SPEED
                 for index, wp in enumerate(self.lane.waypoints):
                     self.set_waypoint_velocity(self.lane.waypoints, index, target_velocity)
             

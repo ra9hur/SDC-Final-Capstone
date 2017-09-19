@@ -72,7 +72,7 @@ class WaypointLoader(object):
         return waypoints
 
     def publish(self, waypoints):
-        rate = rospy.Rate(1)               # 40 Hz in original code
+        rate = rospy.Rate(0.001) # seems downgrading this is crucial!
         while not rospy.is_shutdown():
             lane = Lane()
             lane.header.frame_id = '/world'
