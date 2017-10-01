@@ -6,7 +6,7 @@ class SimModel():
   def __init__(self):
     self.GREEN_CHANNEL = 1
     self.RED_CHANNEL = 2
-    self.area_thr = 100
+    self.area_thr = 80
   def predict(self, image):
     """
     image: cv2.Image (BGR)
@@ -16,13 +16,26 @@ class SimModel():
     red_area = np.sum(red_img == red_img.max())
     green_area = np.sum(green_img == green_img.max())
 
-    print("red area:", red_area, "green_area", green_area)
+
+    prediction = TrafficLight.UNKNOWN
 
     if red_area >= self.area_thr and green_area <= self.area_thr:
-      return TrafficLight.RED
+      prediction = TrafficLight.RED
     elif red_area >= self.area_thr and green_area >= self.area_thr:
-      return TrafficLight.YELLOW if 0.8 <= red_area / green_area <= 1.2 else TrafficLight.RED
+      prediction = TrafficLight.YELLOW if 0.8 <= red_area / green_area <= 1.2 else TrafficLight.RED
     elif green_area >= self.area_thr:
-      return TrafficLight.GREEN
+      prediction = TrafficLight.GREEN
     else:
-      return TrafficLight.UNKNOWN
+      prediction = TrafficLight.UNKNOWN
+
+    print "Traffic Light: ",
+    if prediction == TrafficLight.RED:
+      print("RED")
+    elif prediction == TrafficLight.YELLOW:
+      print("YELLOW")
+    elif prediction == TrafficLight.GREEN:
+      print("CLEAR")
+    else:
+      print("CLEAR")
+      
+    return prediction
